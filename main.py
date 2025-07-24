@@ -25,6 +25,7 @@ all_embeddings = torch.cat(all_embeddings, dim=0)  # Shape: (N, emb_dim)
 async def root():
     return {"status": "API is running"}
 
+
 @app.post("/predict/")
 async def predict(file: UploadFile = File(...)):
     contents = await file.read()
@@ -33,21 +34,23 @@ async def predict(file: UploadFile = File(...)):
     with open(temp_path, "wb") as f:
         f.write(contents)
 
-    # Get embedding and normalize
+    # Get embedding
     embedding = get_embedding(temp_path)
+    if embedding is None or not isinstance(embedding, torch.Tensor):
+        print("❌ Invalid embedding returned")
+        return {"model": None, "confidence": 0.0}
+
     embedding = F.normalize(embedding, p=2, dim=0)
+    print("✅ Embedding shape:", embedding.shape)
 
-    # Compute cosine similarities
-    similarities = F.cosine_similarity(embedding.unsqueeze(0), all_embeddings)  # (N,)
+    similarities = F.cosine_similarity(embedding.unsqueeze(0), all_embeddings)
+    print("📊 Top 10 similarities:", similarities.topk(10).values.tolist())
 
-    # Get top k (e.g. k=3) indices and similarities
     k = 3
-    similarity_threshold = 0.7  # tweak as needed
+    similarity_threshold = 0.3  # temporarily lower
     topk_sim, topk_idx = torch.topk(similarities, k)
-
     topk_labels = [all_labels[i] for i in topk_idx]
 
-    # Weighted voting by similarity
     votes = {}
     for label, sim in zip(topk_labels, topk_sim):
         votes[label] = votes.get(label, 0.0) + sim.item()
