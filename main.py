@@ -10,6 +10,10 @@ app = FastAPI()
 with open("reference_embeddings.pkl", "rb") as f:
     reference_data = pickle.load(f)
 
+@app.get("/")  # <-- add this
+async def root():
+    return {"status": "API is running"}
+
 @app.post("/predict/")
 async def predict(file: UploadFile = File(...)):
     contents = await file.read()
