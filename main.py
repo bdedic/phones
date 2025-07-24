@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, File
 from app.utils import get_embedding
 import pickle
 import torch
+import torch.nn.functional as F
 import io
 
 app = FastAPI()
