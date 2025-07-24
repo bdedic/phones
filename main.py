@@ -25,8 +25,8 @@ async def predict(file: UploadFile = File(...)):
 
     # Get embedding for uploaded image
     embedding = get_embedding(temp_path)
+    embedding = F.normalize(embedding, p=2, dim=0)  # <== Normalize here!
 
-    # Find closest match (e.g., cosine similarity)
     best_match = None
     best_score = -1
     for label, ref_emb in reference_data.items():
