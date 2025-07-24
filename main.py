@@ -7,11 +7,21 @@ import io
 
 app = FastAPI()
 
-# Load your reference embeddings
-with open("reference_embeddings.pkl", "rb") as f:
+# Load your reference embeddings: dict[label] = tensor[num_images, emb_dim]
+with open("reference_embeddings_all.pkl", "rb") as f:
     reference_data = pickle.load(f)
 
-@app.get("/")  # <-- add this
+# Prepare flat lists for efficient searching
+all_labels = []
+all_embeddings = []
+
+for label, embs in reference_data.items():
+    all_labels.extend([label] * embs.size(0))
+    all_embeddings.append(embs)
+
+all_embeddings = torch.cat(all_embeddings, dim=0)  # Shape: (N, emb_dim)
+
+@app.get("/")
 async def root():
     return {"status": "API is running"}
 
@@ -19,24 +29,39 @@ async def root():
 async def predict(file: UploadFile = File(...)):
     contents = await file.read()
 
-    # Save temporary image
     temp_path = "temp.jpg"
     with open(temp_path, "wb") as f:
         f.write(contents)
 
-    # Get embedding for uploaded image
+    # Get embedding and normalize
     embedding = get_embedding(temp_path)
-    embedding = F.normalize(embedding, p=2, dim=0)  # <== Normalize here!
+    embedding = F.normalize(embedding, p=2, dim=0)
 
-    best_match = None
-    best_score = -1
-    for label, ref_emb in reference_data.items():
-        sim = torch.nn.functional.cosine_similarity(embedding, ref_emb, dim=0).item()
-        if sim > best_score:
-            best_score = sim
-            best_match = label
+    # Compute cosine similarities
+    similarities = F.cosine_similarity(embedding.unsqueeze(0), all_embeddings)  # (N,)
 
-    return {"model": best_match, "confidence": round(best_score, 4)}
+    # Get top k (e.g. k=3) indices and similarities
+    k = 3
+    similarity_threshold = 0.7  # tweak as needed
+    topk_sim, topk_idx = torch.topk(similarities, k)
+
+    topk_labels = [all_labels[i] for i in topk_idx]
+
+    # Weighted voting by similarity
+    votes = {}
+    for label, sim in zip(topk_labels, topk_sim):
+        votes[label] = votes.get(label, 0.0) + sim.item()
+
+    if not votes:
+        return {"model": None, "confidence": 0.0}
+
+    best_label = max(votes, key=votes.get)
+    best_score = votes[best_label] / k
+
+    if best_score < similarity_threshold:
+        return {"model": None, "confidence": round(best_score, 4)}
+
+    return {"model": best_label, "confidence": round(best_score, 4)}
 
 if __name__ == "__main__":
     import uvicorn
