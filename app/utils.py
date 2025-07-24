@@ -1,24 +1,21 @@
-from torchvision import models, transforms
+from torchvision.models import efficientnet_b4, EfficientNet_B4_Weights
 from PIL import Image
 import torch
 import torch.nn.functional as F
-import os
 
+# Use GPU if available
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Load pretrained ResNet18 and strip classification head
-model = models.resnet18(pretrained=True)
-model.fc = torch.nn.Identity()
+# Load EfficientNet-B4 with pre-trained weights
+weights = EfficientNet_B4_Weights.IMAGENET1K_V1
+model = efficientnet_b4(weights=weights)
+
+# Remove classification head
+model.classifier = torch.nn.Identity()
 model = model.to(device).eval()
 
-preprocess = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize(
-        mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225]
-    )
-])
+# Preprocessing pipeline recommended for EfficientNet-B4
+preprocess = weights.transforms()
 
 def get_embedding(image_path):
     img = Image.open(image_path).convert("RGB")
