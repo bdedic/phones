@@ -4,3 +4,5 @@ torch
 torchvision
 Pillow
 python-multipart
+opencv-python
+scikit-learn
