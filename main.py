@@ -33,11 +33,17 @@ async def predict(
     contents = await file.read()
     print(f"Received image: {file.filename} ({len(contents)} bytes)")
 
-    temp_path = "temp.jpg"
-    with open(temp_path, "wb") as f:
-        f.write(contents)
+    import os
 
-    embedding = get_embedding(temp_path)
+    temp_path = "temp.jpg"
+    try:
+        with open(temp_path, "wb") as f:
+            f.write(contents)
+
+        embedding = get_embedding(temp_path)
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
     if embedding is None or not isinstance(embedding, torch.Tensor):
         print("get_embedding() returned None or invalid format.")
         return {"model": None, "confidence": 0.0, "alternatives": []}
